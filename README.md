@@ -12,7 +12,7 @@ Protótipo full-stack que transforma PDFs em audiobooks, com painel administrati
 - Player integrado (play/pause, progresso, volume, retomada)
 - Painel Admin para gerenciar títulos, permissões e logs
 
-## Backlog resumido (produto)
+## Backlog do Produto
 |US|Título|
 |--:|-----|
 |US-01|Cadastro de Usuário|
