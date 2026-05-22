@@ -46,8 +46,8 @@ Protótipo full-stack que transforma PDFs em audiobooks, com painel administrati
 |Entrega|Data|Resumo|
 |--:|--:|--|
 |Entrega 1|08/05|Núcleo funcional: autenticação, upload, extração de texto, TTS básico, player e permissões (concluído)|
-|Entrega 2|19/05|OCR, refresh token, status visual, player avançado, logs (em progresso)|
-|Entrega 3|26/05|Mobile e download criptografado (planejado)|
+|Entrega 2|22/05|OCR, refresh token, status visual, player avançado, logs (concluído)|
+|Entrega 3|26/05|Mobile e download criptografado (em progresso)|
 
 ## Tecnologias
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white) ![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white) ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB) ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white) ![ffmpeg](https://img.shields.io/badge/FFmpeg-000000?style=for-the-badge&logo=ffmpeg&logoColor=white)
