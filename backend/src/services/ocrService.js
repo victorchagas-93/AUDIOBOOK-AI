@@ -1,59 +1,102 @@
 import Tesseract from "tesseract.js"
 import { PDFParse } from "pdf-parse"
 
-/**
- * Verifica se um PDF contém principalmente texto ou imagens
- * Se a quantidade de texto extraído é pequena, é provável que seja escaneado
- */
+function normalizeExtractedText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function getScreenshotBuffer(page) {
+  if (Buffer.isBuffer(page?.data)) {
+    return page.data
+  }
+
+  if (Buffer.isBuffer(page?.imageBuffer)) {
+    return page.imageBuffer
+  }
+
+  if (typeof page?.data === "string") {
+    return Buffer.from(page.data, "base64")
+  }
+
+  if (typeof page?.imageBuffer === "string") {
+    return Buffer.from(page.imageBuffer, "base64")
+  }
+
+  return null
+}
+
 export async function isScannedPDF(pdfBuffer) {
+  const parser = new PDFParse({ data: pdfBuffer })
+
   try {
-    const parser = new PDFParse({ data: pdfBuffer })
     const data = await parser.getText()
-    const totalText = data.text.trim()
-    
-    // Se o texto extraído é muito pequeno, provavelmente é um PDF escaneado
+    const totalText = normalizeExtractedText(data.text)
     return totalText.length < 50
   } catch (error) {
     console.error("Erro ao verificar PDF:", error)
     return false
+  } finally {
+    await parser.destroy().catch(() => {})
   }
 }
 
-/**
- * Extrai texto de um PDF escaneado usando OCR com Tesseract
- * Para simplificar, usa a base64 diretamente
- */
 export async function extractTextFromScannedPDF(pdfBuffer) {
+  const parser = new PDFParse({ data: pdfBuffer })
+
   try {
     console.log("Iniciando OCR com Tesseract...")
-    
-    // Converter buffer para base64
-    const base64Image = pdfBuffer.toString("base64")
-    const dataUrl = `data:application/pdf;base64,${base64Image}`
 
-    // Usar Tesseract para OCR
-    const { data: { text } } = await Tesseract.recognize(
-      dataUrl,
-      "por+eng", // Português e Inglês
-      {
-        logger: m => {
-          if (m.status === "recognizing text") {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`)
+    const screenshotResult = await parser.getScreenshot({
+      scale: 1.5,
+      imageBuffer: true,
+      imageDataUrl: false
+    })
+
+    const pages = Array.isArray(screenshotResult?.pages) ? screenshotResult.pages : []
+
+    if (pages.length === 0) {
+      throw new Error("Nenhuma pagina renderizada para OCR")
+    }
+
+    const texts = []
+
+    for (let index = 0; index < pages.length; index += 1) {
+      const imageBuffer = getScreenshotBuffer(pages[index])
+
+      if (!imageBuffer) {
+        throw new Error(`Pagina ${index + 1} sem imagem renderizada para OCR`)
+      }
+
+      const { data: { text } } = await Tesseract.recognize(
+        imageBuffer,
+        "por+eng",
+        {
+          logger: (message) => {
+            if (message.status === "recognizing text") {
+              console.log(`OCR pagina ${index + 1}/${pages.length}: ${Math.round(message.progress * 100)}%`)
+            }
           }
         }
-      }
-    )
+      )
 
-    return text
+      const normalized = normalizeExtractedText(text)
+
+      if (normalized) {
+        texts.push(normalized)
+      }
+    }
+
+    return texts.join("\n\n")
   } catch (error) {
     console.error("Erro ao extrair texto com OCR:", error)
     throw error
+  } finally {
+    await parser.destroy().catch(() => {})
   }
 }
 
-/**
- * Processa PDF, detectando se é escaneado e extraindo texto
- */
 export async function processScannedPDF(pdfBuffer) {
   try {
     console.log("Verificando tipo de PDF...")
@@ -64,20 +107,19 @@ export async function processScannedPDF(pdfBuffer) {
       const text = await extractTextFromScannedPDF(pdfBuffer)
       return {
         isScanned: true,
-        text: text,
+        text,
         method: "OCR"
       }
-    } else {
-      console.log("PDF com texto detectado.")
-      return {
-        isScanned: false,
-        text: null,
-        method: "direct"
-      }
+    }
+
+    console.log("PDF com texto detectado.")
+    return {
+      isScanned: false,
+      text: null,
+      method: "direct"
     }
   } catch (error) {
     console.error("Erro ao processar PDF:", error)
     throw error
   }
 }
-

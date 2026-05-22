@@ -6,6 +6,13 @@ import { PDFParse } from "pdf-parse"
 import { get, logProcessingError, logProcessingEvent, run, transaction } from "../config/database.js"
 import { processScannedPDF, isScannedPDF } from "../services/ocrService.js"
 
+class OCRRequiredError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = "OCRRequiredError"
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const uploadDirectory = path.resolve(__dirname, "../../uploads")
@@ -69,7 +76,7 @@ function splitIntoChapters(text) {
 
   if (matches.length === 0) {
     return chunkText(normalized).map((content, index) => ({
-      title: `Capítulo ${index + 1}`,
+      title: `Capitulo ${index + 1}`,
       content
     }))
   }
@@ -81,7 +88,7 @@ function splitIntoChapters(text) {
     const content = normalizeText(normalized.slice(start, end))
 
     return {
-      title: suffix ? `${match[1]} ${suffix}`.trim() : `Capítulo ${index + 1}`,
+      title: suffix ? `${match[1]} ${suffix}`.trim() : `Capitulo ${index + 1}`,
       content
     }
   }).filter((chapter) => chapter.content)
@@ -90,44 +97,62 @@ function splitIntoChapters(text) {
     return chapters
   }
 
-  return [{ title: "Capítulo 1", content: normalized }]
+  return [{ title: "Capitulo 1", content: normalized }]
 }
 
 async function extractTextFromFile(file) {
+  const parser = new PDFParse({ data: file.buffer })
+
   try {
-    // Primeiro, tentar extrair texto diretamente
-    const parser = new PDFParse({ data: file.buffer })
     const result = await parser.getText()
-    
-    // Se conseguir extrair mais de 50 caracteres, não é um PDF escaneado
-    if (result.text && result.text.trim().length > 50) {
-      console.log("PDF com texto detectado. Usando extração direta.")
-      return result.text
+    const directText = (result.text || "").trim()
+
+    if (directText.length > 50) {
+      console.log("PDF com texto detectado. Usando extracao direta.")
+      return directText
     }
-    
-    // Caso contrário, usar OCR para PDFs escaneados
-    console.log("Possível PDF escaneado detectado. Tentando OCR...")
+
+    console.log("Possivel PDF escaneado detectado. Tentando OCR...")
+
+    let scanned = false
+
     try {
-      const scanned = await isScannedPDF(file.buffer)
-      if (scanned) {
-        console.log("PDF escaneado confirmado. Executando OCR...")
-        const ocrResult = await processScannedPDF(file.buffer)
-        if (ocrResult.text) {
-          console.log("OCR completado com sucesso.")
-          return ocrResult.text
-        }
+      scanned = await isScannedPDF(file.buffer)
+
+      if (!scanned) {
+        return directText
       }
+
+      console.log("PDF escaneado confirmado. Executando OCR...")
+      const ocrResult = await processScannedPDF(file.buffer)
+      const ocrText = ocrResult.text?.trim()
+
+      if (ocrText) {
+        console.log("OCR completado com sucesso.")
+        return ocrText
+      }
+
+      throw new OCRRequiredError(`OCR nao conseguiu extrair texto de ${file.originalname}`)
     } catch (ocrError) {
-      console.log("OCR falhou, usando extração direta como fallback.")
+      if (ocrError instanceof OCRRequiredError) {
+        throw ocrError
+      }
+
+      if (scanned) {
+        throw new OCRRequiredError(`OCR falhou para ${file.originalname}: ${ocrError.message}`)
+      }
+
+      console.log("OCR falhou, usando extracao direta como fallback.")
       logProcessingError(null, `OCR falhou: ${ocrError.message}`)
     }
-    
-    // Se OCR falhar ou não for necessário, retornar o texto extraído diretamente
-    return result.text || ""
+
+    return directText
   } catch (error) {
     console.error("Erro ao extrair texto:", error)
-    logProcessingError(null, `Erro na extração de texto: ${error.message}`)
+    logProcessingError(null, `Erro na extracao de texto: ${error.message}`)
     throw error
+  } finally {
+    await parser.destroy().catch(() => {})
   }
 }
 
@@ -157,13 +182,13 @@ export async function uploadFile(req, res) {
     }
 
     if (!audiobookId) {
-      return res.status(400).json({ error: "audiobook_id é obrigatório" })
+      return res.status(400).json({ error: "audiobook_id e obrigatorio" })
     }
 
     const audiobook = get("SELECT * FROM audiobooks WHERE id = ?", [Number(audiobookId)])
 
     if (!audiobook) {
-      return res.status(404).json({ error: "Audiobook não encontrado" })
+      return res.status(404).json({ error: "Audiobook nao encontrado" })
     }
 
     const invalidFile = req.files.find((file) => file.mimetype !== "application/pdf")
@@ -194,7 +219,7 @@ export async function uploadFile(req, res) {
       const chapters = splitIntoChapters(extractedText)
 
       if (chapters.length === 0) {
-        throw new Error(`Não foi possível extrair texto do arquivo ${file.originalname}`)
+        throw new Error(`Nao foi possivel extrair texto do arquivo ${file.originalname}`)
       }
 
       processedFiles.push({
@@ -207,8 +232,8 @@ export async function uploadFile(req, res) {
       for (const chapter of chapters) {
         chapterRows.push({
           title: req.files.length > 1
-          ? `${chapter.title} - ${file.originalname}`
-          : chapter.title,
+            ? `${chapter.title} - ${file.originalname}`
+            : chapter.title,
           content: chapter.content,
           order_index: nextOrder
         })
@@ -256,13 +281,15 @@ export async function uploadFile(req, res) {
 
     if (Number.isFinite(audiobookId)) {
       try {
-        run("UPDATE audiobooks SET status = 'falhou' WHERE id = ?", [audiobookId])
+        const nextStatus = error instanceof OCRRequiredError ? "necessita_ocr" : "falhou"
+        run("UPDATE audiobooks SET status = ? WHERE id = ?", [nextStatus, audiobookId])
         logProcessingError(audiobookId, error.message)
       } catch (loggingError) {
         console.error("Erro ao registrar falha de processamento:", loggingError)
       }
     }
 
-    return res.status(500).json({ error: error.message })
+    const statusCode = error instanceof OCRRequiredError ? 422 : 500
+    return res.status(statusCode).json({ error: error.message })
   }
 }
