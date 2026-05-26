@@ -2,10 +2,15 @@ import React, { useEffect, useState } from "react"
 
 function InlineAudioPreview({ chapterId, chapterTitle, onRequestAudio }) {
   const [audioUrl, setAudioUrl] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [requested, setRequested] = useState(false)
 
   useEffect(() => {
+    if (!requested) {
+      return undefined
+    }
+
     let active = true
     let objectUrl = ""
 
@@ -42,7 +47,19 @@ function InlineAudioPreview({ chapterId, chapterTitle, onRequestAudio }) {
         URL.revokeObjectURL(objectUrl)
       }
     }
-  }, [chapterId, onRequestAudio])
+  }, [chapterId, onRequestAudio, requested])
+
+  function handleLoadPreview() {
+    setRequested(true)
+  }
+
+  if (!requested) {
+    return (
+      <button type="button" className="ghost-button" onClick={handleLoadPreview}>
+        Carregar preview
+      </button>
+    )
+  }
 
   if (loading) {
     return <span className="mini-audio-status">Carregando preview...</span>

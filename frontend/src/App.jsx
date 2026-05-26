@@ -1942,18 +1942,12 @@ const styles = `
       padding: 14px;
     }
 
-    .player-shell {
-      padding-bottom: 260px;
-    }
-
     .player-footer {
-      position: fixed;
-      left: 12px;
-      right: 12px;
+      position: sticky;
       bottom: 12px;
       z-index: 20;
-      max-height: min(62vh, 460px);
-      overflow: auto;
+      max-height: none;
+      overflow: visible;
       border-radius: 18px;
     }
 
