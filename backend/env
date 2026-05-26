@@ -1,0 +1,9 @@
+JWT_SECRET=supersegredo
+ADMIN_KEY=fatec
+PORT=3000 
+KOKORO_MODEL_ID=onnx-community/Kokoro-82M-v1.0-ONNX
+KOKORO_DTYPE=q8
+KOKORO_DEVICE=cpu
+KOKORO_VOICE=pf_dora
+KOKORO_PYTHON_BIN=python
+KOKORO_PYTHON_SCRIPT=scripts/kokoro_tts.py

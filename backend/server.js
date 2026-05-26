@@ -1,6 +1,8 @@
 import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
+import path from "path"
+import { fileURLToPath } from "url"
 import authRoutes from "./src/routes/authRoutes.js"
 import audiobookRoutes from "./src/routes/audiobookRoutes.js"
 import chapterRoutes from "./src/routes/chapterRoutes.js"
@@ -9,7 +11,11 @@ import permissionRoutes from "./src/routes/permissionRoutes.js"
 import logRoutes from "./src/routes/logRoutes.js"
 import { initDatabase } from "./src/config/database.js"
 
-dotenv.config()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+dotenv.config({ path: path.join(__dirname, "env") })
+dotenv.config({ path: path.join(__dirname, ".env") })
 initDatabase()
 
 const app = express()
